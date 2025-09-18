@@ -1,0 +1,191 @@
+<app-common-dialog
+  [header]="questionModel ? questionModel : 'Create Questions'"
+  [showHeader]="true"
+  [showFooter]="false"
+  [visible]="visible"
+  (close)="onClose()"
+  [width]="'lg'"
+>
+  <form
+    [formGroup]="questionForm"
+    (ngSubmit)="onSave()"
+    class="create-question-form"
+  >
+    <div class="form-section mb-4">
+      <!-- Question No -->
+      <div class="mb-3">
+        <label class="text-bs-grey-500 font-sm-bold">Question No</label>
+        <input type="text" class="form-control" formControlName="number" />
+      </div>
+
+      <!-- Question Type -->
+      <div class="mb-3">
+        <label class="text-bs-grey-500 font-sm-bold">Question Type</label>
+        <app-custom-dropdown
+          [options]="questionTypes"
+          formControlName="type"
+          placeholder="Select Question Type"
+          [optionLabel]="'label'"
+          [optionValue]="'id'"
+        >
+        </app-custom-dropdown>
+      </div>
+    </div>
+
+    <!-- Question Text -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Question Text</label>
+      <app-text-editor formControlName="text"></app-text-editor>
+    </div>
+
+    <!-- Instructions -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Instructions</label>
+      <app-text-editor formControlName="instructions"></app-text-editor>
+    </div>
+
+    <!-- Validation (for Numeric type) -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Validation</label>
+      <app-text-editor formControlName="validation"></app-text-editor>
+    </div>
+
+    <!-- Response Order (for other types) -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Response Order</label>
+      <app-custom-dropdown
+        [options]="responseOrders"
+        formControlName="responseOrder"
+        placeholder="Select Response Order"
+        [optionLabel]="'name'"
+        [optionValue]="'value'"
+      >
+      </app-custom-dropdown>
+    </div>
+
+    <!-- Responses -->
+    <div class="responses-section mb-5" formArrayName="responses">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex gap-1">
+          <h6 class="font-l-bold">Responses</h6>
+          <div
+            class="text-bs-purple-500 font-base-bold cursor-pointer pl-3"
+            (click)="openMaskDialog()"
+          >
+            + Add Masking/Filter
+          </div>
+        </div>
+
+        <div
+          class="text-bs-purple-500 font-base-bold cursor-pointer"
+          (click)="addResponse()"
+        >
+          + Add
+        </div>
+      </div>
+
+      <div class="response-wrapper mt-4">
+        <div
+          *ngFor="let response of responses.controls; let i = index"
+          [formGroupName]="i"
+          class="d-flex align-items-center flex-column xl:flex-row mb-2 justify-content-between"
+        >
+          <!-- Number + Text -->
+          <div class="d-flex align-items-center w-100 mb-2 xl:mb-0">
+            <input
+              type="text"
+              class="form-control me-2 response"
+              [value]="i + 1"
+              readonly
+            />
+            <input
+              type="text"
+              class="form-control me-2 w-100 response"
+              formControlName="responseText"
+              placeholder="Enter response"
+            />
+          </div>
+
+          <div class="separator me-3">-</div>
+
+          <!-- Icons -->
+          <div class="d-flex align-items-center gap-3">
+            <ng-container *ngFor="let icon of iconNames; let j = index">
+              <img
+                [src]="getIconSrc(j, i)"
+                [alt]="icon"
+                width="24"
+                height="24"
+                class="ms-1 cursor-pointer"
+                [ngClass]="
+                  icon !== 'close-circle'
+                    ? getIconClass(
+                        icon,
+                        hoveredIconIndex[i],
+                        activeIconIndex[i][j],
+                        j
+                      )
+                    : 'icon-close-circle'
+                "
+                (mouseenter)="setHovered(i, j)"
+                (mouseleave)="setHovered(i, null)"
+                (click)="setActiveStatus(i, j)"
+              />
+            </ng-container>
+          </div>
+
+          <!-- Remove Button -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="d-flex justify-content-end gap-3">
+      <button
+        type="button"
+        class="btn-bs-grey-50-grey-300"
+        (click)="onClose()"
+        [disabled]="loading"
+      >
+        Cancel
+      </button>
+      <!-- <button type="submit" class="btn-bs-purple-500-white">Save</button> -->
+      <button
+        type="button"
+        class="btn-bs-purple-500-white d-flex justify-content-center align-items-center"
+        (click)="onSave()"
+        [disabled]="loading"
+      >
+        <span *ngIf="!loading">Save</span>
+        <span *ngIf="loading" class="d-flex align-items-center">
+          <span
+            class="spinner-border spinner-border-sm me-2"
+            role="status"
+          ></span>
+          Saving...
+        </span>
+      </button>
+    </div>
+  </form>
+</app-common-dialog>
+
+<app-common-dialog
+  [visible]="createMaskingDialogVisible"
+  [header]="'Add Masking/Filter'"
+  [showHeader]="false"
+  [showFooter]="false"
+  (close)="closeMaskDialog()"
+  [width]="'lg'"
+>
+<div class="question-content-section">
+    <h5>Select Question</h5>
+    
+    <div class="questions-container">
+      <div class="question-row" *ngFor="let question of questions">
+        <img [src]="question.icon" alt="question-icon" class="question-icon" />
+        <span>{{ question.Qno | number : "2.0" }}</span>
+        <span>{{ question.question }}</span>
+      </div>
+    </div>
+  </div>
+</app-common-dialog>
