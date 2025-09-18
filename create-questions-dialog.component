@@ -1,0 +1,498 @@
+import { CommonModule } from "@angular/common";
+import {
+  Component,
+  EventEmitter,
+  Input,
+  OnInit,
+  Output,
+  SimpleChanges,
+} from "@angular/core";
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  FormArray,
+  Validators,
+} from "@angular/forms";
+
+// adjust these import paths to match your project structure
+import { CommonDialogComponent } from "../../../common-dialog/common-dialog.component";
+import { CustomDropdownComponent } from "../../../custom-dropdown/custom-dropdown.component";
+import { createGuid } from "@app/utills/helper";
+import { ConnectivityService } from "@app/connectivity.service";
+import { ProjectDetailsService } from "@app/services/project-details.service";
+import { Survey } from "@app/interfaces/survey";
+import { QuestionsList } from "@app/interfaces/questionsList";
+import { Subject, takeUntil } from "rxjs";
+import { QuestionType } from "@app/interfaces/question";
+import { TextEditorComponent } from "@app/components/text-editor/text-editor.component";
+import { ToastService } from "@app/services/toast.service";
+
+@Component({
+  selector: "app-create-questions-dialog",
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    CommonDialogComponent,
+    CustomDropdownComponent,
+    TextEditorComponent,
+  ],
+  templateUrl: "./create-questions-dialog.component.html",
+  styleUrls: ["./create-questions-dialog.component.scss"],
+})
+export class CreateQuestionsDialogComponent implements OnInit {
+  @Input() visible = false;
+  @Input() questionModel: any = null; // optional: existing question when editing
+  @Output() close = new EventEmitter<void>();
+  @Output() questionSaved = new EventEmitter<any>();
+  guid = createGuid();
+  questionForm!: FormGroup | any;
+  @Input() section: any;
+  @Input() selectedQuestions: any;
+  public survey!: Survey;
+  private destroy$ = new Subject<void>();
+  question: any;
+  QyuestionTypes: QuestionType[] = [];
+  loading: boolean = false;
+  constructor(
+    private projectService: ConnectivityService,
+    private projectDetailsService: ProjectDetailsService,
+    private toastService: ToastService,
+    private fb: FormBuilder
+  ) {
+    this.projectDetailsService.projectDetails$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.survey = data;
+      });
+  }
+
+  // icon system (shared)
+  iconNames: string[] = [
+    "document", // KeepPosition
+    "unlock", // Other
+    "shield-cross", // NotTerminate
+    "shield-tick", // Terminate
+    "text-block", // Punch
+    "close-circle", // remove
+  ];
+
+  // mapping for property keys (index aligned with iconNames)
+  iconKeysOrder: (string | null)[] = [
+    "Punch",
+    "KeepPosition",
+    "NotTerminate",
+    "Terminate",
+    "Other",
+    null,
+  ];
+
+  hoveredIconIndex: (number | null)[] = [];
+  activeIconIndex: boolean[][] = [];
+
+  // simple list of question types for dropdown (use label because template expects 'label')
+  questionTypes = [
+    { id: 1, label: "Single Response" },
+    { id: 2, label: "Multiple Response" },
+    { id: 3, label: "Open End List" },
+    { id: 4, label: "Numeric List" },
+    { id: 5, label: "Rank" },
+    { id: 6, label: "Grid Single" },
+    { id: 7, label: "Grid Multiple" },
+  ];
+  responseOrders = [
+    { name: "InOrder", value: "InOrder" },
+    { name: "Randomize", value: "Randomize" },
+    { name: "Rotate", value: "Rotate" },
+    { name: "Flip", value: "Flip" },
+    { name: "Alphabetic", value: "Alphabetic" },
+  ];
+
+  ngOnInit(): void {
+    this.questionForm = this.fb.group({
+      number: ["", Validators.required],
+      type: [null, Validators.required],
+      text: [""],
+      instructions: [""],
+      validation: [""],
+      responseOrder: [null],
+      responses: this.fb.array([]),
+    });
+    // if an existing question model is provided, patch it
+    if (this.selectedQuestions) {
+      console.log(
+        "Patching form with existing question:",
+        this.selectedQuestions
+      );
+      this.patchForm(this.selectedQuestions);
+    } else {
+      // start with one response by default
+      this.addResponse();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (
+      changes["selectedQuestions"] &&
+      changes["selectedQuestions"].currentValue
+    ) {
+      console.log("selectedQuestions changed:", this.selectedQuestions);
+      this.patchForm(this.selectedQuestions);
+    } else {
+      this.resetForm();
+    }
+  }
+  // shorthand getter
+  get responses(): FormArray {
+    return this.questionForm.get("responses") as FormArray;
+  }
+
+  // add a response formGroup (with properties group)
+  addResponse(): void {
+    const rg = this.fb.group({
+      responseText: ["", Validators.required],
+      properties: this.fb.group({
+        KeepPosition: [false],
+        Other: [false],
+        NotTerminate: [false],
+        Terminate: [false],
+        Punch: [false],
+      }),
+    });
+
+    this.responses.push(rg);
+
+    const newIndex = this.responses.length - 1;
+    this.hoveredIconIndex[newIndex] = null;
+    this.activeIconIndex[newIndex] = Array(this.iconNames.length).fill(false);
+  }
+
+  removeResponse(index: number): void {
+    if (index < 0 || index >= this.responses.length) return;
+    this.responses.removeAt(index);
+    this.hoveredIconIndex.splice(index, 1);
+    this.activeIconIndex.splice(index, 1);
+  }
+
+  // UI hover handlers
+  setHovered(responseIndex: number, iconIndex: number | null): void {
+    this.hoveredIconIndex[responseIndex] = iconIndex;
+  }
+
+  // toggle property or handle remove icon
+  setActiveStatus(responseIndex: number, iconIndex: number): void {
+    const icon = this.iconNames[iconIndex];
+    const key = this.iconKeysOrder[iconIndex];
+    // remove icon: just remove the response
+    if (icon === "close-circle") {
+      this.removeResponse(responseIndex);
+      return;
+    }
+
+    if (!key) return;
+
+    const responseGroup = this.responses.at(responseIndex) as FormGroup;
+    const propCtrl = responseGroup.get(["properties", key]);
+    if (!propCtrl) return;
+
+    const newVal = !propCtrl.value;
+    propCtrl.setValue(newVal);
+    // keep UI active array in sync
+    this.activeIconIndex[responseIndex][iconIndex] = newVal;
+  }
+
+  // image src builder: adds '-clr' suffix when hovered OR active
+  getIconSrc(iconIndex: number, responseIndex: number): string {
+    const icon = this.iconNames[iconIndex];
+    if (icon === "close-circle") return `assets/images/projects/${icon}.svg`;
+    const isHovered = this.hoveredIconIndex[responseIndex] === iconIndex;
+    const isActive = this.activeIconIndex[responseIndex][iconIndex];
+    const suffix = isHovered || isActive ? "-clr" : "";
+    return `assets/images/projects/${icon}${suffix}.svg`;
+  }
+
+  getIconClass(
+    icon: string,
+    hoveredIdx: number | null,
+    active: boolean,
+    iconIndex: number
+  ): string {
+    if (icon === "close-circle") return "icon-close-circle";
+    const hover = hoveredIdx === iconIndex ? `icon-${icon}-hover` : "";
+    const activeClass = active ? `icon-${icon}-active` : "";
+    return `icon-${icon} ${hover} ${activeClass}`;
+  }
+
+  // patch form with existing question (for edit)
+  patchForm(question: any): void {
+    // patch main fields
+    this.questionForm.patchValue({
+      number: question.questionNumber || "",
+      type: question.questionType || null,
+      text: question.questionInnerText || question.questionText || "",
+      instructions: question.questionInstruction || "",
+      validation: question.validation || "",
+      responseOrder: question.properties?.AnswerlistOrder || "InOrder",
+    });
+
+    // clear existing responses
+    while (this.responses.length) this.responses.removeAt(0);
+    this.hoveredIconIndex = [];
+    this.activeIconIndex = [];
+
+    // patch responses
+    (question.responses || []).forEach((r: any) => {
+      const rg = this.fb.group({
+        responseText: [
+          r.responseInnerText || r.responseText || "",
+          Validators.required,
+        ],
+        properties: this.fb.group({
+          KeepPosition: [!!r.properties?.KeepPosition],
+          Other: [!!r.properties?.Other],
+          NotTerminate: [!!r.properties?.NotTerminate],
+          Terminate: [!!r.properties?.Terminate],
+          Punch: [!!r.properties?.Punch],
+        }),
+        responseID: [r.responseID], // keep original ID for edit
+      });
+
+      this.responses.push(rg);
+
+      const idx = this.responses.length - 1;
+      this.hoveredIconIndex[idx] = null;
+      this.activeIconIndex[idx] = Array(this.iconNames.length).fill(false);
+
+      // set active icons based on properties
+      const props = r.properties || {};
+      this.iconKeysOrder.forEach((k, iconIdx) => {
+        if (k && props[k]) this.activeIconIndex[idx][iconIdx] = true;
+      });
+    });
+
+    // if no responses, add one empty
+    if (!question.responses || !question.responses.length) this.addResponse();
+  }
+  onSave(): void {
+    if (this.questionForm.invalid) {
+      this.questionForm.markAllAsTouched();
+      return;
+    }
+    this.loading = true;
+    const formValue = this.questionForm.value;
+
+    const payload = {
+      questionID: this.selectedQuestions?.questionID || this.guid,
+      sectionID: this.section?.sectionID || "",
+      surveyID: this.section?.surveyID || "",
+      questionNumber: formValue.number,
+      questionVariable: formValue.number,
+      questionOrder: this.selectedQuestions?.questionOrder || "1",
+      questionText: formValue.text || "New Question",
+      questionInnerText: formValue.text || "New Question",
+      questionTypeId: null,
+      questionType: formValue.type,
+      questionInstruction: formValue.instructions || "",
+      questionTextSurveyProgramming: "",
+      questionTextDataProcessing: "",
+      outputStyle: null,
+      startLoc: "",
+      endLoc: "",
+      ratingScale: "",
+      reverse: "",
+      createdBy: null,
+      createdDate: null,
+      modifiedBy: null,
+      modifiedDate: null,
+      responses: formValue.responses.map((r: any, index: number) => ({
+        responseID: r.responseID || this.guid,
+        surveyID: this.section?.surveyID || "",
+        responseText: r.responseText || "",
+        responseInnerText: r.responseText || "",
+        responseInitialOrder: index + 1,
+        responseOrder: index + 1,
+        responseCode: (index + 1).toString(),
+        responseTextRight: "",
+        responseInstruction: "",
+        instruction: "",
+        processedComments: "",
+        processedCommentsDecipher: "",
+        processedCommentsDooblo: "",
+        processedCommentsDimensions: "",
+        questionID: this.selectedQuestions?.questionID || this.guid,
+        questionTypeId: null,
+        outputStyle: null,
+        responseTextSurveyProgramming: null,
+        responseTextDataProcessing: null,
+        responseProcessedInstruction: null,
+        createdBy: null,
+        createdDate: null,
+        modifiedBy: null,
+        modifiedDate: null,
+        start: null,
+        end: null,
+        outputData: null,
+        predefinedList: null,
+        comments: null,
+        questionType: null,
+        questionVariable: formValue.number,
+        properties: {
+          KeepPosition: r.properties?.KeepPosition || false,
+          Punch: r.properties?.Punch || false,
+          Other: r.properties?.Other || false,
+          Terminate: r.properties?.Terminate || false,
+          NotTerminate: r.properties?.NotTerminate || false,
+          Code: false,
+        },
+      })),
+      questionResponses: null,
+      attributes: [],
+      questions: [],
+      innerStartIndex: null,
+      comments: null,
+      processedComments: "FieldWidth='1' ",
+      processedCommentsDecipher: "",
+      processedCommentsDooblo: 'RangeMin="1" RangeMax="1" ',
+      processedCommentsDimensions: "",
+      questionMask: "",
+      precodeMask: "",
+      columnMask: "",
+      scalePrecodeMask: "",
+      rowMask: "",
+      validation: "",
+      outputData: null,
+      properties: {
+        AnswerlistOrder: formValue.responseOrder || "InOrder",
+        Dropdown: false,
+      },
+    };
+
+    this.question = payload;
+
+    if (!this.section.questions) this.section.questions = [];
+    const existingQuestionIndex = this.section.questions.findIndex(
+      (q: { questionID: any }) => q.questionID === this.question.questionID
+    );
+
+    if (existingQuestionIndex > -1) {
+      // Update existing question
+      this.section.questions[existingQuestionIndex] = { ...this.question };
+    } else {
+      // Add new question
+      this.section.questions.push({ ...this.question });
+    }
+
+    // Add/update section in the survey
+    const sectionIndex = this.survey.sections.findIndex(
+      (s) => s.sectionID === this.section.sectionID
+    );
+
+    if (sectionIndex > -1) {
+      this.survey.sections[sectionIndex] = this.section;
+    } else {
+      this.survey.sections.push(this.section);
+    }
+
+    this.projectService.saveSurvey(this.survey).subscribe({
+      next: (res) => {
+        console.log("Survey saved successfully", res);
+        this.toastService.notify(
+          "success",
+          "Success",
+          `Question ${
+            this.selectedQuestions ? "Edited" : "Created"
+          } Successfully!`,
+          "purple-500",
+          false
+        );
+        this.questionSaved.emit(this.survey);
+        this.loading = false;
+        this.onClose();
+        if (!this.selectedQuestions) {
+          this.resetForm();
+        }
+      },
+      error: (err) => {
+        console.error("Error saving survey", err);
+        this.loading = false;
+      },
+    });
+  }
+
+  onClose(): void {
+    this.visible = false;
+    this.close.emit();
+  }
+
+  resetForm(): void {
+    // reset main form fields
+    this.questionForm.reset({
+      number: "",
+      type: null,
+    });
+
+    // clear all responses
+    while (this.responses.length) {
+      this.responses.removeAt(0);
+    }
+
+    // reset icon states
+    this.hoveredIconIndex = [];
+    this.activeIconIndex = [];
+
+    // add one empty response
+    this.addResponse();
+
+    // clear existing model
+    this.questionModel = null;
+
+    // generate fresh GUID
+    this.guid = createGuid();
+  }
+
+  // Add masking / filter section
+  createMaskingDialogVisible: boolean = false;
+
+  questions: QuestionsList[] = [
+    {
+      Qno: 1,
+      icon: "assets/images/questions/task.png",
+      question: "Does your household high-speed home Internet service (Fiber, Cable, DSL, 5G Home Internet, etc.)?"
+    },
+    {
+      Qno: 2,
+      icon: "assets/images/questions/task.png",
+      question: "Which best describes your role in the decision-making process for selecting an Internet service provider?",
+    },
+    {
+      Qno: 3,
+      icon: "assets/images/questions/task.png",
+      question: "Does your household high-speed home Internet service (Fiber, Cable, DSL, 5G Home Internet, etc.)?"
+    },
+
+    {
+      Qno:4,
+      icon:"assets/images/questions/task.png",
+      question:"Does your household high-speed home Internet service (Fiber, Cable, DSL, 5G Home Internet, etc.)?"
+    },
+    {
+      Qno: 5,
+      icon: "assets/images/questions/task.png",
+      question: "Which best describes your role in the decision-making process for selecting an Internet service provider?",
+    },
+    {
+      Qno:6,
+      icon:"assets/images/questions/task.png",
+      question:"Does your household high-speed home Internet service (Fiber, Cable, DSL, 5G Home Internet, etc.)?"
+    },
+  ];
+
+  openMaskDialog(): void {
+    this.createMaskingDialogVisible = true;
+  }
+
+  closeMaskDialog(): void {
+    this.createMaskingDialogVisible = false;
+  }
+}
