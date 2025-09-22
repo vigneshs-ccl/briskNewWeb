@@ -1,0 +1,436 @@
+<app-common-dialog
+  [header]="questionModel ? questionModel : 'Create Questions'"
+  [showHeader]="true"
+  [showFooter]="false"
+  [visible]="visible"
+  (close)="onClose()"
+  [width]="'lg'"
+>
+  <form
+    [formGroup]="questionForm"
+    (ngSubmit)="onSave()"
+    class="create-question-form"
+  >
+    <div class="form-section mb-4">
+      <!-- Question No -->
+      <div class="mb-3">
+        <label class="text-bs-grey-500 font-sm-bold">Question No</label>
+        <input type="text" class="form-control" formControlName="number" />
+      </div>
+
+      <!-- Question Type -->
+      <div class="mb-3">
+        <label class="text-bs-grey-500 font-sm-bold">Question Type</label>
+        <app-custom-dropdown
+          [options]="questionTypes"
+          formControlName="type"
+          placeholder="Select Question Type"
+          [optionLabel]="'label'"
+          [optionValue]="'id'"
+        >
+        </app-custom-dropdown>
+      </div>
+    </div>
+
+    <!-- Question Text -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Question Text</label>
+      <app-text-editor formControlName="text"></app-text-editor>
+    </div>
+
+    <!-- Instructions -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Instructions</label>
+      <app-text-editor formControlName="instructions"></app-text-editor>
+    </div>
+
+    <!-- Validation (for Numeric type) -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Validation</label>
+      <app-text-editor formControlName="validation"></app-text-editor>
+    </div>
+
+    <!-- Response Order (for other types) -->
+    <div class="mb-3">
+      <label class="text-bs-grey-500 font-sm-bold">Response Order</label>
+      <app-custom-dropdown
+        [options]="responseOrders"
+        formControlName="responseOrder"
+        placeholder="Select Response Order"
+        [optionLabel]="'name'"
+        [optionValue]="'value'"
+      >
+      </app-custom-dropdown>
+    </div>
+
+    <!-- Responses -->
+    <div class="responses-section mb-5" formArrayName="responses">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex gap-1">
+          <h6 class="font-l-bold">Responses</h6>
+          <div
+            class="text-bs-purple-500 font-base-bold cursor-pointer pl-3"
+            (click)="openMaskDialog()"
+          >
+            + Add Masking/Filter
+          </div>
+          <div
+            class="text-bs-purple-500 font-base-bold cursor-pointer pl-3"
+            (click)="openMaskDialog(true)"
+            *ngIf="hasMasking()"
+          >
+            Show Masking
+          </div>
+        </div>
+
+        <div
+          class="text-bs-purple-500 font-base-bold cursor-pointer"
+          (click)="addResponse()"
+        >
+          + Add
+        </div>
+      </div>
+
+      <div class="response-wrapper mt-4">
+        <div
+          *ngFor="let response of responses.controls; let i = index"
+          [formGroupName]="i"
+          class="d-flex align-items-center flex-column xl:flex-row mb-2 justify-content-between"
+        >
+          <!-- Number + Text -->
+          <div class="d-flex align-items-center w-100 mb-2 xl:mb-0">
+            <input
+              type="text"
+              class="form-control me-2 response"
+              [value]="i + 1"
+              readonly
+            />
+            <input
+              type="text"
+              class="form-control me-2 w-100 response"
+              formControlName="responseText"
+              placeholder="Enter response"
+            />
+          </div>
+
+          <div class="separator me-3">-</div>
+
+          <!-- Icons -->
+          <div class="d-flex align-items-center gap-3">
+            <ng-container *ngFor="let icon of iconNames; let j = index">
+              <img
+                [src]="getIconSrc(j, i)"
+                [alt]="icon"
+                width="24"
+                height="24"
+                class="ms-1 cursor-pointer"
+                [ngClass]="
+                  icon !== 'close-circle'
+                    ? getIconClass(
+                        icon,
+                        hoveredIconIndex[i],
+                        activeIconIndex[i][j],
+                        j
+                      )
+                    : 'icon-close-circle'
+                "
+                (mouseenter)="setHovered(i, j)"
+                (mouseleave)="setHovered(i, null)"
+                (click)="setActiveStatus(i, j)"
+              />
+            </ng-container>
+          </div>
+
+          <!-- Remove Button -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="d-flex justify-content-end gap-3">
+      <button
+        type="button"
+        class="btn-bs-grey-50-grey-300"
+        (click)="onClose()"
+        [disabled]="loading"
+      >
+        Cancel
+      </button>
+      <!-- <button type="submit" class="btn-bs-purple-500-white">Save</button> -->
+      <button
+        type="button"
+        class="btn-bs-purple-500-white d-flex justify-content-center align-items-center"
+        (click)="onSave()"
+        [disabled]="loading"
+      >
+        <span *ngIf="!loading">Save</span>
+        <span *ngIf="loading" class="d-flex align-items-center">
+          <span
+            class="spinner-border spinner-border-sm me-2"
+            role="status"
+          ></span>
+          Saving...
+        </span>
+      </button>
+    </div>
+  </form>
+</app-common-dialog>
+
+<app-common-dialog
+  [visible]="createMaskingDialogVisible"
+  [header]="viewOnly ? 'Show Masking' : 'Add Masking/Filter'"
+  [showHeader]="false"
+  [showFooter]="false"
+  (close)="closeMaskDialog()"
+  [width]="'lg'"
+>
+  <!-- LIST STEP -->
+  <div class="question-content-section" *ngIf="step === 'list'">
+    <h5 class="side-heading">Select Question</h5>
+    <!-- question section -->
+    <div class="questions-container">
+      <div
+        class="question-row"
+        *ngFor="let question of questions"
+        (click)="!question.disabled && openOptions(question)"
+        [class.disabled]="question.disabled"
+      >
+        <img [src]="question.icon" alt="question-icon" class="question-icon" />
+        <span class="qno">{{ question.Qno }}</span>
+        <span class="qtext">{{ question.question }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTIONS STEP -->
+  <div *ngIf="step === 'options'" class="options-section">
+    <div class="option-container gap-2 mb-5">
+      <!-- Selected option -->
+      <div class="d-flex gap-2 align-items-center">
+        <p-radiobutton
+          inputId="selectedMode"
+          name="selectionMode"
+          value="selected"
+          [(ngModel)]="selectionMode"
+          (onClick)="setSelectionMode('selected')"
+        ></p-radiobutton>
+        <label for="selectedMode">Selected</label>
+      </div>
+
+      <!-- Unselected option -->
+      <div class="d-flex gap-2 align-items-center">
+        <p-radiobutton
+          inputId="unselectedMode"
+          name="selectionMode"
+          value="unselected"
+          [(ngModel)]="selectionMode"
+          (onClick)="setSelectionMode('unselected')"
+        ></p-radiobutton>
+        <label for="unselectedMode">Unselected</label>
+      </div>
+
+      <!-- Unselected option -->
+      <div class="d-flex gap-2 align-items-center">
+        <p-radiobutton
+          inputId="customMode"
+          name="selectionMode"
+          value="custom"
+          [(ngModel)]="selectionMode"
+          (onClick)="setSelectionMode('custom')"
+        ></p-radiobutton>
+        <label for="customMode">Custom</label>
+      </div>
+    </div>
+    
+    <div class="options-container">
+
+      <!-- QUESTION ROW WITH CONDITION (If / Or/And) AND COMPARATOR (is/isnot/sum) -->
+      <div
+        class="question-header d-flex align-items-center justify-content-between mb-3"
+      >
+        <div class="d-flex align-items-center gap-3">
+          <!-- Left: If for Qno 1; otherwise Or/And dropdown -->
+          <ng-container *ngIf="currentQuestion">
+            <div
+              *ngIf="currentQuestion.Qno === 1"
+              class="btn-bs-purple-500-light py-1"
+            >
+              If
+            </div>
+
+            <div *ngIf="currentQuestion.Qno !== 1" class="select-condition">
+              <app-custom-dropdown
+                [options]="operationsList"
+                [optionLabel]="'label'"
+                [optionValue]="'value'"
+                [ngModel]="currentQuestion.conditionType"
+                (ngModelChange)="setConditionType($event)"
+                placeholder="Select Condition"
+                appendTo="body"
+                (click)="$event.stopPropagation()"
+              >
+              </app-custom-dropdown>
+            </div>
+          </ng-container>
+
+          <!-- question text shown as label too -->
+          <div class="question-header-text">
+            <strong>Q{{ currentQuestion?.Qno }}:</strong>
+            <span>{{ currentQuestion?.question }}</span>
+          </div>
+        </div>
+
+        <!-- Right: comparator dropdown -->
+        <div class="select-comparator" (click)="$event.stopPropagation()">
+          <app-custom-dropdown
+            [options]="[
+              { label: 'is', value: 'is' },
+              { label: 'is not', value: 'isnot' },
+              { label: 'sum', value: 'sum' }
+            ]"
+            [optionLabel]="'label'"
+            [optionValue]="'value'"
+            [ngModel]="currentQuestion?.comparator"
+            (ngModelChange)="setComparator($event)"
+            appendTo="body"
+            placeholder="Select Comparator"
+          ></app-custom-dropdown>
+        </div>
+      </div>
+
+      <!-- OPTIONS LIST -->
+      <div class="questions-container">
+        <div
+          class="question-row option-row d-flex align-items-center justify-content-between"
+          *ngFor="let opt of currentQuestion?.options"
+        >
+          <div class="d-flex align-items-center gap-2">
+            <app-custom-checkbox
+              [inputId]="'option' + opt.id"
+              [label]="opt.option"
+              [ngModel]="currentQuestion?.selectedOptionIds?.includes(opt.id)"
+              (ngModelChange)="toggleOption(opt.id, $event)"
+            ></app-custom-checkbox>
+          </div>
+
+          <!-- Option-level operator becomes visible only for selected option -->
+          <div
+            class="option-operator"
+            *ngIf="currentQuestion?.selectedOptionIds?.includes(opt.id)"
+          >
+            <app-custom-dropdown
+              [options]="operationsList"
+              [optionLabel]="'label'"
+              [optionValue]="'value'"
+              [ngModel]="getOptionOperator(opt.id)"
+              (ngModelChange)="setOptionOperator(opt.id, $event)"
+              appendTo="body"
+              placeholder="Select Operator"
+              (click)="$event.stopPropagation()"
+            ></app-custom-dropdown>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-3 mt-4">
+      <button
+        type="button"
+        class="btn-bs-grey-50-grey-300"
+        (click)="cancelOptions()"
+        [disabled]="loading"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn-bs-purple-500-white d-flex justify-content-center align-items-center"
+        (click)="viewSelected()"
+        [disabled]="loading"
+      >
+        <span *ngIf="!loading">Save</span>
+        <span *ngIf="loading" class="d-flex align-items-center">
+          <span
+            class="spinner-border spinner-border-sm me-2"
+            role="status"
+          ></span>
+          Saving...
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <!-- REVIEW STEP -->
+  <div *ngIf="step === 'review'" class="review-section">
+    <div class="d-flex align-center mb-3">
+      <h5 class="text-lg" *ngIf="!viewOnly">Selected Options</h5>
+      <div
+        class="text-bs-purple-500 font-base-bold cursor-pointer pl-3"
+        (click)="step = 'list'"
+        *ngIf="!viewOnly"
+      >
+        Add More
+      </div>
+    </div>
+
+    <ng-container *ngFor="let question of questions">
+      <div class="review-item mb-4" *ngIf="question.selectedOptionIds?.length">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-3">
+            <!-- left: condition type (If for first question, Or/And text for other questions) -->
+            <span class="badge-condition btn-bs-purple-500-light py-1">
+              {{
+                question.Qno === 1 ? "If" : (question.conditionType | uppercase)
+              }}
+            </span>
+            <strong class="text-gray-600">
+              Q{{ question.Qno }}: {{ question.question }}
+            </strong>
+          </div>
+
+          <!-- show comparator pill -->
+          <div class="badge-comparator btn-bs-sea-blue-400-dark-outline py-1">{{ question.comparator }}</div>
+        </div>
+
+        <ul class="mt-2 ">
+          <li
+            *ngFor="let opt of getSelectedOptionTexts(question); let i = index"
+            class="d-flex justify-content-between mt-2 ml-7"
+          >
+            <div >{{ i + 1 }}. {{ opt.text }}</div>
+            <div class="opt-operator-display">
+              <!-- show operator chosen for this option -->
+              <small *ngIf="opt.operator" class="btn-bs-purple-500-dark-outline py-1">{{ opt.operator | uppercase }}</small>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </ng-container>
+
+    <div class="d-flex justify-content-end gap-3" *ngIf="!viewOnly">
+      <button
+        type="button"
+        class="btn-bs-grey-50-grey-300"
+        (click)="closeMaskDialog()"
+        [disabled]="loading"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn-bs-purple-500-white d-flex justify-content-center align-items-center"
+        (click)="closeMaskDialog()"
+        [disabled]="loading"
+      >
+        <span *ngIf="!loading">save</span>
+        <span *ngIf="loading" class="d-flex align-items-center">
+          <span
+            class="spinner-border spinner-border-sm me-2"
+            role="status"
+          ></span>
+          Saving...
+        </span>
+      </button>
+    </div>
+  </div>
+</app-common-dialog>
