@@ -1,0 +1,241 @@
+<app-common-dialog
+  [header]="'Questions Library'"
+  [showHeader]="false"
+  [showFooter]="false"
+  [visible]="visible"
+  (close)="onClose()"
+  [width]="'lg'"
+>
+  <!-- body -->
+  <div class="questions">
+    <div class="search-section d-flex gap-5 pb-3">
+      <div
+        *ngIf="showSearch"
+        class="d-flex align-items-center bg-bs-light rounded-pill px-3 py-2 shadow-sm cursor"
+        (click)="focusSearchInput()"
+      >
+        <img
+          src="../assets/images/login/search.svg"
+          class="rounded-circle"
+          alt="Search Icon"
+        />
+        <input
+          #searchInput
+          type="text"
+          class="form-control-search border-0 custom-placeholder ms-2 search"
+          placeholder="Search ..."
+        />
+        <!-- <i class="bi bi-stars text-bs-purple-500 fs-4 ms-2"></i>  -->
+      </div>
+
+      <!-- <app-custom-dropdown
+        [options]="studyTypes"
+        formControlName="studyType"
+        [optionLabel]="'label'"
+        [optionValue]="'value'"
+        placeholder="All categories"
+        appendTo="body"
+      > -->
+      <app-custom-dropdown placeholder="All Categories" appendTo="body">
+      </app-custom-dropdown>
+
+      <app-custom-dropdown placeholder="Global" appendTo="body">
+      </app-custom-dropdown>
+    </div>
+    <p-accordion>
+      <ng-container *ngFor="let q of questions; let i = index">
+        <p-accordion-panel [value]="i">
+          <p-accordion-header>
+            <ng-template #toggleicon let-active="active">
+              <i class="pi" [ngClass]="active ? 'pi-minus' : 'pi-plus'"></i>
+            </ng-template>
+            <span class="flex justify-between items-center w-full">
+              <span>
+                <div class="text-bs-grey-900 font-l-bold">{{ q.title }}</div>
+                <small class="text-bs-grey-200 font-base-reg">
+                  {{ q.type }} • {{ q.question }}
+                </small>
+                <!-- Show saved Age ranges in header -->
+                <div
+                  *ngIf="q.title === 'Age' && savedAges.length > 0"
+                  class="mt-1 text-bs-grey-900 font-base-reg"
+                >
+                  <ng-container *ngFor="let age of savedAges; let j = index">
+                    <span class="bg-bs-purple-50 text-bs-purple-500 px-3 py-2 border-rd-33 font-sm-medium">
+                      {{ age.minAge }}-{{ age.maxAge }} 
+                    </span>
+                    <span *ngIf="j !== savedAges.length - 1">&nbsp;&nbsp;</span>
+                  </ng-container>
+                </div>
+              </span>
+            </span>
+          </p-accordion-header>
+
+          <p-accordion-content>
+            <!--  Special case: Age section -->
+            <ng-container *ngIf="q.title === 'Age'; else defaultContent">
+              <form [formGroup]="ageForm">
+                <div formArrayName="ages" class="d-flex flex-column gap-2">
+                  <div
+                    *ngFor="let age of ages.controls; let i = index"
+                    [formGroupName]="i"
+                    class="d-flex align-items-center gap-2"
+                  >
+                    <div class="d-flex align-items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        formControlName="minAge"
+                        placeholder="Min"
+                        class="form-control"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        formControlName="maxAge"
+                        placeholder="Max"
+                        class="form-control"
+                      />
+                    </div>
+
+                    <!-- Show + on last row, delete on others -->
+                    <!-- <button
+                      *ngIf="i === ages.length - 1; else deleteBtn"
+                      type="button"
+                      class="btn-bs-purple-500-white"
+                      (click)="addAge()"
+                    >
+                      <img
+                      src="./assets/images/projects/plus.svg"
+                      alt="Add button"
+                    />
+                    </button> -->
+
+                    <div
+                      class="cursor-pointer"
+                      (click)="addAge()"
+                      *ngIf="i === ages.length - 1; else deleteBtn"
+                    >
+                      <img
+                        src="./assets/images/projects/add-circle.svg"
+                        alt="Add button"
+                      />
+                    </div>
+                    <ng-template #deleteBtn>
+                      <div class="cursor-pointer" (click)="removeAge(i)">
+                        <img
+                          src="./assets/images/projects/x-circle.svg"
+                          alt="terminate button"
+                        />
+                      </div>
+                      <div class="cursor-pointer" (click)="removeAge(i)">
+                        <img
+                          src="./assets/images/projects/delete.svg"
+                          alt="delete button"
+                        />
+                      </div>
+                    </ng-template>
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="d-flex justify-content-start mt-4 ml-2 gap-3">
+                  <div
+                    type="button"
+                    class="text-bs-grey-300 text-decoration-underline font-base-medium"
+                    (click)="removeAllAges()"
+                  >
+                    Remove All
+                  </div>
+                  <div
+                    type="button"
+                    class="text-bs-purple-500 text-decoration-underline font-base-medium"
+                    (click)="saveAges()"
+                  >
+                    Save
+                  </div>
+                </div>
+              </form>
+            </ng-container>
+
+            <ng-container *ngIf="q.title === 'Gender'; else defaultContent">
+              <form [formGroup]="genderForm">
+                <div formArrayName="genders" class="d-flex flex-column gap-2">
+                  <div
+                    *ngFor="let g of genders.controls; let i = index"
+                    [formGroupName]="i"
+                    class="d-flex align-items-center gap-2"
+                  >
+                    <div>
+                      <!-- Single Gender input -->
+                      <input
+                        type="text"
+                        formControlName="gender"
+                        placeholder="Enter gender"
+                        class="form-control custom-placeholder"
+                      />
+                    </div>
+
+                    <!-- Show + on last row, delete on others -->
+                    <div
+                      class="cursor-pointer"
+                      (click)="addGender()"
+                      *ngIf="i === genders.length - 1; else deleteBtnG"
+                    >
+                      <img
+                        src="./assets/images/projects/add-circle.svg"
+                        alt="Add button"
+                      />
+                    </div>
+                    <ng-template #deleteBtnG>
+                      <div class="cursor-pointer" (click)="removeGender(i)">
+                        <img
+                          src="./assets/images/projects/x-circle.svg"
+                          alt="terminate button"
+                        />
+                      </div>
+                      <div class="cursor-pointer" (click)="removeGender(i)">
+                        <img
+                          src="./assets/images/projects/delete.svg"
+                          alt="delete button"
+                        />
+                      </div>
+                    </ng-template>
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="d-flex justify-content-start mt-4 ml-2 gap-3">
+                  <div
+                    type="button"
+                    class="text-bs-grey-300 text-decoration-underline font-base-medium"
+                    (click)="removeAllGenders()"
+                  >
+                    Remove All
+                  </div>
+                  <div
+                    type="button"
+                    class="text-bs-purple-500 text-decoration-underline font-base-medium"
+                    (click)="saveGenders()"
+                  >
+                    Save
+                  </div>
+                </div>
+              </form>
+            </ng-container>
+
+            <!--  Default content for non-Age -->
+            <ng-template #defaultContent>
+              <!-- <p class="m-0">{{ q.question }}</p> -->
+            </ng-template>
+          </p-accordion-content>
+        </p-accordion-panel>
+      </ng-container>
+    </p-accordion>
+  </div>
+
+  <div dialog-footer #dialogFooter class="d-flex gap-2">
+    <button type="button" class="btn-bs-grey-50-grey-300">Cancel</button>
+    <button type="submit" class="btn-bs-purple-500-white">Save</button>
+  </div>
+</app-common-dialog>
