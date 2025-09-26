@@ -1,0 +1,189 @@
+import { CommonModule } from "@angular/common";
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  ViewChild,
+} from "@angular/core";
+import {
+  FormArray,
+  FormBuilder,
+  FormControl,
+  FormGroup,
+  FormsModule,
+  ReactiveFormsModule,
+  Validators,
+} from "@angular/forms";
+import { CommonDialogComponent } from "@app/components/common-dialog/common-dialog.component";
+import { AccordionModule } from "primeng/accordion";
+import { SharedModule } from "primeng/api";
+import { DialogModule } from "primeng/dialog";
+import { AvatarModule } from "primeng/avatar";
+import { BadgeModule } from "primeng/badge";
+import { CustomDropdownComponent } from "@app/components/custom-dropdown/custom-dropdown.component";
+import { AgeRange } from "@app/interfaces/ageRange";
+@Component({
+  selector: "app-sampling-questions-dialog",
+  imports: [
+    CommonDialogComponent,
+    DialogModule,
+    SharedModule,
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    AccordionModule,
+    AvatarModule,
+    BadgeModule,
+    CustomDropdownComponent,
+  ],
+  templateUrl: "./sampling-questions-dialog.component.html",
+  styleUrl: "./sampling-questions-dialog.component.scss",
+})
+export class SamplingQuestionsDialogComponent {
+  @Input() visible: boolean = false;
+  @Output() close = new EventEmitter<void>();
+
+  // Typed forms
+  ageForm!: FormGroup<{
+    ages: FormArray<
+      FormGroup<{
+        minAge: FormControl<number | null>;
+        maxAge: FormControl<number | null>;
+      }>
+    >;
+  }>;
+
+  genderForm!: FormGroup<{
+    genders: FormArray<
+      FormGroup<{
+        gender: FormControl<string | null>;
+      }>
+    >;
+  }>;
+
+  savedAges: { minAge: number; maxAge: number }[] = [];
+  constructor(private fb: FormBuilder) {}
+
+  questions = [
+    { title: "Age", type: "Range", question: "What is your age?" },
+    { title: "Gender", type: "Single punch", question: "Are you...?" },
+    { title: "ZIP", type: "Open ended", question: "What is your ZIP Code?" },
+    { title: "State", type: "Dummy", question: "What is your State?" },
+    { title: "Country", type: "Dummy", question: "What is your Country?" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+    { title: "Category", type: "", question: "Select your Category" },
+  ];
+
+  showSearch: boolean = true;
+
+  @ViewChild("searchInput") searchInput!: ElementRef<HTMLInputElement>;
+  focusSearchInput(): void {
+    this.searchInput.nativeElement.focus();
+  }
+
+  // age section
+  ngOnInit(): void {
+    this.ageForm = this.fb.group({
+      ages: this.fb.array([this.buildAgeItem()]),
+    });
+
+    this.genderForm = this.fb.group({
+      genders: this.fb.array([this.buildGenderItem()]),
+    });
+  }
+
+  private buildAgeItem(): FormGroup<{
+    minAge: FormControl<number | null>;
+    maxAge: FormControl<number | null>;
+  }> {
+    return this.fb.group({
+      minAge: this.fb.control<number | null>(null, Validators.required),
+      maxAge: this.fb.control<number | null>(null, Validators.required),
+    });
+  }
+
+  // get ages(): FormArray {
+  //   return this.ageForm.get("ages") as FormArray;
+  // }
+
+  get ages() {
+    return this.ageForm.controls.ages;
+  }
+
+  addAge(): void {
+    this.ages.push(this.buildAgeItem());
+  }
+
+  removeAge(index: number): void {
+    this.ages.removeAt(index);
+  }
+
+  removeAllAges(): void {
+    this.ages.clear();
+    this.savedAges = [];
+    this.ages.push(this.buildAgeItem()); // reset to single empty row
+  }
+
+  saveAges(): void {
+    this.savedAges = (this.ageForm.value.ages as AgeRange[]).filter(
+      (age) => age.minAge && age.maxAge
+    );
+    console.log("Saved Ages:", this.savedAges);
+  }
+
+  // -------- GENDER SECTION ----------
+  private buildGenderItem(): FormGroup<{
+    gender: FormControl<string | null>;
+  }> {
+    return this.fb.group({
+      gender: this.fb.control<string | null>(null, Validators.required),
+    });
+  }
+
+  get genders() {
+    return this.genderForm.controls.genders;
+  }
+
+  addGender(): void {
+    this.genders.push(this.buildGenderItem());
+  }
+
+  removeGender(index: number): void {
+    this.genders.removeAt(index);
+  }
+
+  removeAllGenders(): void {
+    this.genders.clear();
+    this.genders.push(this.buildGenderItem());
+  }
+
+  saveGenders(): void {
+    console.log("Saved Genders:", this.genderForm.value.genders);
+  }
+
+  // -------- RESET & CLOSE ----------
+  resetAll(): void {
+    this.ageForm.reset();
+    this.genderForm.reset();
+    this.removeAllAges();
+    this.removeAllGenders();
+  }
+
+  onClose(): void {
+    this.resetAll();
+    this.close.emit();
+  }
+}
